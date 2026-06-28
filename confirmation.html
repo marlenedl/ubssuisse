@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Virement Confirmé </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="shared.js"></script>
+    
+    <style>
+        /* Styles de l'en-tête (standard Site B) */
+        header { background-color: #003366; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .user-info { font-size: 0.9em; }
+        
+        /* Styles pour le conteneur de confirmation */
+        main { display: flex; flex-direction: column; align-items: center; padding: 30px; }
+        h2 { color: #003366; margin-bottom: 25px; }
+        .account-block {
+            background: #f9f9f9;
+            padding: 25px;
+            border-radius: 8px;
+            border-left: 5px solid #003366;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 700px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .account-block h2 {
+            color: #003366;
+        }
+        .account-block table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        .account-block th, .account-block td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        .account-block th {
+            background-color: #e0e6ed;
+            width: 30%;
+        }
+        .account-block button {
+            margin-top: 20px;
+            background-color: #003366;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .account-block button:hover {
+             background-color: #0055aa;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div class="user-info"><img src=https://media.licdn.com/dms/image/v2/D4E0BAQGeHTpFeZs4bg/company-logo_200_200/company-logo_200_200/0/1699608998965?e=2147483647&v=beta&t=aUqRx5fPJaaczRVUcyGkdzXdIGQHyatyzXSkc7QqUM0 height=100 width=105>
+        <span id="user-name">Bienvenue</span><br>
+        <span id="last-conn" class="last-conn">Dernière connexion : </span>
+        <a href="index.html" class="status">Se déconnecter</a>
+    </div>
+</header>
+
+<main>
+    <h2>Confirmation de votre virement</h2>
+    <div class="account-block">
+        
+        <p id="confirmation-message" style="font-weight: bold; color: #003366; font-size: 1.1em;">
+            </p>
+        <hr>
+        
+        <p><strong>Montant débité :</strong> <span id="conf-montant" style="color: #d9534f; font-weight: bold;">...</span></p>
+        <p><strong>Nouveau solde estimé :</strong> <span id="conf-solde" style="color: #4CAF50; font-weight: bold;">...</span></p>
+        
+        <table>
+            <tbody>
+                <tr><th>Motif</th><td id="conf-motif"></td></tr>
+                <tr><th>IBAN</th><td id="conf-iban"></td></tr>
+                <tr><th>BIC</th><td id="conf-bic"></td></tr>
+                <tr><th>Domiciliation</th><td id="conf-domiciliation"></td></tr>
+                <tr><th>Bénéficiaire</th><td id="conf-nomPrenom"></td></tr>
+            </tbody>
+        </table>
+        
+        <a href="dashboard.html"><button style="margin-right: 15px;">Retour à la Synthèse</button></a>
+        <a href="historique.html"><button>Voir l'historique</button></a>
+    </div>
+</main>
+<footer>
+   <p>© SOCIETE GENERALE - AGENCE DE CASABLANCA </p>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Mise à jour de l'en-tête (méthode asynchrone)
+    // ⚠️ CORRECTION : Utilisation de checkAuth()
+    const user = await checkAuth(); 
+    
+    if (!user) {
+        // Redirection gérée par checkAuth()
+        return; 
+    }
+    
+    // Remplissage de l'en-tête (fait par checkAuth si les éléments existent, mais on les met à jour explicitement si nécessaire)
+    const nameParts = user.name.split(' ');
+    const display = nameParts.length > 1 ? `${nameParts[0]} ${nameParts[1]}` : user.name;
+    document.getElementById('user-name').textContent = `Bienvenue ${display}`;
+    
+    // 2. Récupération des paramètres de l'URL
+    const params = new URLSearchParams(window.location.search);
+
+    const montantStr = params.get('montant'); // Chaîne de caractères
+    const soldeApresStr = params.get('soldeApres'); // Chaîne de caractères
+    
+    const motif = params.get('motif') || '';
+    const iban = params.get('iban') || '';
+    const bic = params.get('bic') || '';
+    const domiciliation = params.get('domiciliation') || '';
+    const nomPrenom = params.get('user_name') || '';
+    const statut = params.get('statut');
+
+
+    if (statut === 'succes' && montantStr && soldeApresStr) {
+        
+        // ⚠️ CORRECTION : Formatage des devises pour l'affichage
+        const montantFormatted = formatCurrency(parseFloat(montantStr));
+        // soldeApresStr est déjà formaté par virement.html, mais si on voulait le refaire : 
+        // const soldeApresFormatted = formatCurrency(parseFloat(soldeApresStr));
+
+        // AFFICHAGE DES RÉSULTATS
+        document.getElementById('conf-montant').textContent = montantFormatted;
+        document.getElementById('conf-solde').textContent = soldeApresStr; // Utilisation de la chaîne déjà formatée
+        document.getElementById('conf-motif').textContent = motif;
+        document.getElementById('conf-iban').textContent = iban;
+        document.getElementById('conf-bic').textContent = bic;
+        document.getElementById('conf-domiciliation').textContent = domiciliation;
+        document.getElementById('conf-nomPrenom').textContent = nomPrenom;
+
+        document.getElementById('confirmation-message').innerHTML =
+            `✅ Virement de fonds enregistré avec succès. <br>Votre virement de **${montantFormatted}** à **${nomPrenom}** a été traité.`;
+        
+    } else {
+        // Affichage en cas de problème ou si les paramètres sont incomplets
+        document.getElementById('confirmation-message').innerHTML = `
+            ❌ Erreur de confirmation : La transaction n'a pas pu être vérifiée. Veuillez consulter votre historique.
+        `;
+        document.getElementById('conf-montant').textContent = "---";
+        document.getElementById('conf-solde').textContent = "---";
+        
+        // Afficher les données même si incomplètes pour le debug
+        document.getElementById('conf-motif').textContent = motif || 'Non spécifié';
+        document.getElementById('conf-iban').textContent = iban || 'Non spécifié';
+        document.getElementById('conf-bic').textContent = bic || 'Non spécifié';
+        document.getElementById('conf-domiciliation').textContent = domiciliation || 'Non spécifié';
+        document.getElementById('conf-nomPrenom').textContent = nomPrenom || 'Non spécifié';
+    }
+});
+</script>
+</body>
+</html>
